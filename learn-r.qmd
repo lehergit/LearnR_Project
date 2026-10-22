@@ -1,0 +1,206 @@
+---
+title: "Learn R in an Afternoon"
+subtitle: "A hands-on tour using 32 classic cars"
+author: "Leher Harlalka"
+format:
+  html:
+    toc: true
+    code-tools: true
+    embed-resources: true
+execute:
+  warning: false
+---
+
+## Before we start
+
+This is a short, hands-on intro to R for complete beginners. No installs beyond R itself, no downloads, and no data cleaning headaches. We'll use `mtcars`, a small dataset about 32 cars from 1974 that comes built into R.
+
+By the end you'll have:
+
+- done math, made lists, and worked with a table of data
+- asked questions of that data and gotten answers
+- made two charts
+- written your own function
+- checked that your code actually works
+
+**How to use this page:** read a bit, run the code, then change something and see what happens. Breaking things on purpose is the fastest way to learn.
+
+```{r}
+#| label: setup
+source("R/helpers.R")
+```
+
+## 1. R is a calculator (about 5 minutes)
+
+```{r}
+2 + 2
+10 / 3
+sqrt(144)
+```
+
+Stash a result under a name with `<-` (read it as "gets"):
+
+```{r}
+miles <- 26.2
+km <- miles * 1.609
+km
+```
+
+**Try it:** change `miles` to the length of your favorite walk or run and rerun the chunk.
+
+## 2. Vectors: a list of things (about 10 minutes)
+
+A vector is just several values in a row. `c()` means "combine."
+
+```{r}
+mpg_samples <- c(21, 18.7, 30.4, 15.2)
+mean(mpg_samples)
+max(mpg_samples)
+mpg_samples[2]          # the second one
+mpg_samples[mpg_samples > 20]   # only the ones above 20
+```
+
+That last line is a big deal. You can filter a list by describing what you want, with no loop required.
+
+## 3. Meet the data (about 15 minutes)
+
+Our helper function loads `mtcars` and tidies it up a little: car names become a column, and we add kilometers per liter.
+
+```{r}
+cars <- load_cars()
+head(cars)
+```
+
+Three quick questions to ask any new dataset:
+
+```{r}
+dim(cars)      # how many rows and columns?
+str(cars)      # what type is each column?
+summary(cars)  # what do the numbers look like?
+```
+
+`cars$mpg` pulls out one column as a vector, so everything from section 2 works on it:
+
+```{r}
+mean(cars$mpg)
+```
+
+## 4. Ask questions of your data (about 20 minutes)
+
+**Which cars are the most fuel efficient?**
+
+```{r}
+sorted <- cars[order(-cars$mpg), ]
+head(sorted[, c("model", "mpg")], 5)
+```
+
+**Which cars are heavy *and* powerful?**
+
+```{r}
+muscle <- cars[cars$weight_lbs > 3500 & cars$hp > 200, ]
+muscle[, c("model", "hp", "weight_lbs")]
+```
+
+**Does the average change by cylinder count?**
+
+```{r}
+summarize_by(cars, "cyl", "mpg")
+```
+
+**What about manual vs. automatic?**
+
+```{r}
+summarize_by(cars, "transmission", "mpg")
+```
+
+Notice anything? More cylinders means worse mileage, and manuals did better here. (Careful: in this dataset manual cars also tend to be lighter, so transmission may not be the real cause. Spotting that kind of trap is a core data skill.)
+
+## 5. Make it a chart (about 20 minutes)
+
+```{r}
+#| fig-cap: "Heavier cars use more fuel."
+plot(
+  cars$weight_lbs, cars$mpg,
+  xlab = "Weight (lbs)", ylab = "Miles per gallon",
+  main = "Heavier cars go fewer miles",
+  pch = 19, col = "steelblue"
+)
+```
+
+```{r}
+#| fig-cap: "Average mpg by cylinder count."
+avg <- summarize_by(cars, "cyl", "mpg")
+barplot(
+  avg$avg_mpg, names.arg = avg$group,
+  xlab = "Cylinders", ylab = "Average mpg",
+  col = "tomato", main = "Fewer cylinders, better mileage"
+)
+```
+
+## 6. Write a function (about 15 minutes)
+
+When you catch yourself copying and pasting code, it's time for a function. Here's one that sorts cars into three efficiency buckets:
+
+```{r}
+mpg_label <- function(mpg) {
+  cut(mpg, breaks = c(-Inf, 18, 25, Inf),
+      labels = c("thirsty", "average", "efficient"), right = FALSE)
+}
+
+cars$efficiency <- mpg_label(cars$mpg)
+table(cars$efficiency)
+```
+
+(The same function lives in `R/helpers.R`, so the tests can check it.)
+
+## 7. A first model (about 20 minutes)
+
+Is there really a relationship between weight and mileage? A linear model draws the best-fit line through the dots.
+
+```{r}
+model <- fit_mpg_model(cars)
+coef(model)
+```
+
+The second number is the slope: roughly how many mpg you lose for every extra pound. It's small per pound, so let's make it concrete:
+
+```{r}
+predict_mpg(model, c(2500, 3500, 4500))
+```
+
+```{r}
+plot(cars$weight_lbs, cars$mpg, pch = 19, col = "steelblue",
+     xlab = "Weight (lbs)", ylab = "Miles per gallon")
+abline(model, col = "red", lwd = 2)
+```
+
+## 8. How do we know the code is right? (about 15 minutes)
+
+Here's a trick professionals use: **test your code against a world where you already know the answer.**
+
+We'll invent 500 fake cars where each extra pound costs *exactly* 0.006 mpg, with some random noise. If our model can't recover that number, we've got a bug.
+
+```{r}
+fake <- simulate_cars(n = 500, slope = -0.006)
+fake_model <- fit_mpg_model(fake)
+coef(fake_model)["weight_lbs"]
+```
+
+It should land very close to -0.006. It does. That's evidence our modeling code works. The `tests/` folder in this project automates this kind of check.
+
+## Recap and challenges
+
+You've now used vectors, data frames, filtering, grouping, plots, functions, a model, and a simulation to check your work.
+
+Challenges to try on your own:
+
+1. Find the 3 cars with the best horsepower per pound.
+2. Make a bar chart of average `hp` by transmission type.
+3. Change `simulate_cars()` to use more noise (`noise_sd = 6`). What happens to the slope estimate? Why?
+4. Swap `mtcars` for `iris` or `airquality` and repeat sections 3-5.
+
+## Where to go next
+
+- The free book *R for Data Science* (r4ds.hadley.nz)
+- The `ggplot2` package for prettier charts
+- Posit Cloud, if you want to run R in a browser
